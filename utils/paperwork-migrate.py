@@ -68,7 +68,9 @@ def main(
 
     The paperless-ngx REST API is used to consume these docs.
 
-    NOTE: Only a flatpak install of paperwork is currently supported.
+    NOTE: Only a flatpak install of Paperwork is currently supported.
+    NOTE: The labels of docs in Paperwork are assumed to be the same as tags in
+          paperless-ngx.
     """
 
     # Check paths exist
