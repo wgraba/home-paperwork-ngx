@@ -13,6 +13,10 @@ Configuration for [paperless-ngx](https://paperless-ngx.readthedocs.io/en/latest
 * Create `.env` files - `docker-compose-example.env` -> `docker-compose.env`, `example-env` -> `.env`
 * `docker-compose up -d`
 
+# Migrating from Paperwork
+
+See `utils/paperwork-migrate.py --help`
+
 # TODO
 
 TBD
