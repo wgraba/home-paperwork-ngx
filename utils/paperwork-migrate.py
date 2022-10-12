@@ -108,6 +108,11 @@ def main(
         if f.is_dir():
             print(f"Processing {f.name}...")
 
+            export_path = tpath.joinpath(f"./{f.name}.pdf")
+            if export_path.exists():
+                print(f"{export_path} already exists; assume already migrated")
+                continue
+
             doc_date = datetime.datetime.strptime(f.name.split("_")[0], "%Y%m%d")
 
             # Get Labels
@@ -127,89 +132,84 @@ def main(
             print(f"Date: {doc_date}, Labels: {labels}")
 
             # Export PDF
-            export_path = tpath.joinpath(f"./{f.name}.pdf")
-            if export_path.exists():
-                print(f"{export_path} already exists; assume already migrated")
+            print(f"Exporting to {export_path}...")
 
-            else:
-                print(f"Exporting to {export_path}...")
+            # Determine available filters
+            cp = subprocess.run(
+                paperwork_json_cmd
+                + [
+                    "export",
+                    f.name,
+                ],
+                check=True,
+                capture_output=True,
+            )
+            filters = json.loads(cp.stdout)
 
-                # Determine available filters
-                cp = subprocess.run(
+            # Prefere unmodified PDF
+            if "unmodified_pdf" in filters:
+                subprocess.run(
                     paperwork_json_cmd
                     + [
                         "export",
                         f.name,
+                        "--filter",
+                        "unmodified_pdf",
+                        "--out",
+                        export_path.absolute(),
                     ],
                     check=True,
                     capture_output=True,
                 )
-                filters = json.loads(cp.stdout)
 
-                # Prefere unmodified PDF
-                if "unmodified_pdf" in filters:
-                    subprocess.run(
-                        paperwork_json_cmd
-                        + [
-                            "export",
-                            f.name,
-                            "--filter",
-                            "unmodified_pdf",
-                            "--out",
-                            export_path.absolute(),
-                        ],
-                        check=True,
-                        capture_output=True,
+            elif "doc_to_pages" in filters:
+                subprocess.run(
+                    paperwork_json_cmd
+                    + [
+                        "export",
+                        f.name,
+                        "--filter",
+                        "doc_to_pages",
+                        "--filter",
+                        "img_boxes",
+                        "--filter",
+                        "generated_pdf",
+                        "--out",
+                        export_path.absolute(),
+                    ],
+                    check=True,
+                    capture_output=True,
+                )
+
+            else:
+                logger.error(f"Unknown filters {filters}!")
+                # raise RuntimeError(f"Unknown filters {filters}!")
+
+            if not dryrun:
+                # Push to paperless-ngx instance
+                print(f"Uploading {export_path} to paperless-ngx server...")
+                payload_tags = []
+                for label in labels:
+                    if label.lower() in tag_ids:
+                        payload_tags.append(tag_ids[label.lower()])
+
+                payload = {
+                    "created": doc_date.strftime("%Y-%m-%d"),
+                    "tags": payload_tags,
+                }
+
+                documents = {
+                    "document": open(export_path, "rb"),
+                }
+                rsp = req_session.post(
+                    f"{paperless_url}/api/documents/post_document/",
+                    data=payload,
+                    files=documents,
+                )
+                if not rsp.ok:
+                    raise RuntimeError(
+                        f"Unable to submit '{export_path}' to paperless-ngx!"
                     )
-
-                elif "doc_to_pages" in filters:
-                    subprocess.run(
-                        paperwork_json_cmd
-                        + [
-                            "export",
-                            f.name,
-                            "--filter",
-                            "doc_to_pages",
-                            "--filter",
-                            "img_boxes",
-                            "--filter",
-                            "generated_pdf",
-                            "--out",
-                            export_path.absolute(),
-                        ],
-                        check=True,
-                        capture_output=True,
-                    )
-
-                else:
-                    logger.error(f"Unknown filters {filters}!")
-                    # raise RuntimeError(f"Unknown filters {filters}!")
-
-                if not dryrun:
-                    # Push to paperless-ngx instance
-                    print(f"Uploading {export_path} to paperless-ngx server...")
-                    payload_tags = []
-                    for label in labels:
-                        if label.lower() in tag_ids:
-                            payload_tags.append(tag_ids[label.lower()])
-
-                    payload = {
-                        "created": doc_date.strftime("%Y-%m-%d"),
-                        "tags": payload_tags,
-                    }
-
-                    documents = {
-                        "document": open(export_path, "rb"),
-                    }
-                    rsp = req_session.post(
-                        f"{paperless_url}/api/documents/post_document/",
-                        data=payload,
-                        files=documents,
-                    )
-                    if not rsp.ok:
-                        raise RuntimeError(
-                            f"Unable to submit '{export_path}' to paperless-ngx!"
-                        )
 
 
 if __name__ == "__main__":
