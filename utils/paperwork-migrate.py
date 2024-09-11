@@ -99,8 +99,15 @@ def main(
 
     # Get mapping of tag names to ids
     tag_ids = {}
-    rsp = req_session.get(f"{paperless_url}/api/tags/")
-    rsp.raise_for_status()
+    pagecount = 1
+    while True:
+        rsp = req_session.get(f"{paperless_url}/api/tags/?page={pagecount}")
+        rsp.raise_for_status()
+        for tag in rsp.json()["results"]:
+            tag_ids[tag["slug"]] = tag["id"]
+        pagecount = pagecount + 1
+        if rsp.json()["next"] == None:
+            break
 
     for tag in rsp.json()["results"]:
         tag_ids[tag["slug"]] = tag["id"]
